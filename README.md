@@ -1,85 +1,82 @@
-# ha-eufy-sdk-bridge
+# Eufy bridge with encrypted cloud-credential storage
 
-[![CI](https://github.com/mega-yfue/ha-eufy-sdk-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/mega-yfue/ha-eufy-sdk-bridge/actions/workflows/ci.yml)
-[![node](https://img.shields.io/badge/node-%E2%89%A524-brightgreen?logo=nodedotjs&logoColor=white)](./package.json)
-[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
+This fork of [mega-yfue/ha-eufy-sdk-bridge](https://github.com/mega-yfue/ha-eufy-sdk-bridge)
+protects Eufy cloud passwords, session tokens, negotiated keys and push credentials
+using an operator-provisioned encrypted filesystem. Version **0.7.3** uses the
+stable upstream 0.7.2 runtime/SDK image pinned to an immutable digest.
 
-The host-facing daemon: one process that logs into eufy **once** and exposes the
-[`eufy-sdk`](https://github.com/mega-yfue/eufy-sdk) to a frontend — Home Assistant, a web UI,
-anything. Ships as a multi-arch Docker image with [go2rtc](https://github.com/AlexxIT/go2rtc)
-bundled, so live camera video is available as RTSP / WebRTC / MSE / HLS with nothing else to install.
+## Storage protection
 
-```
-WS    :3000/ws             control, state, events     ← the frontend talks to this
-HTTP  :3000/stream/<sn>    live video (Annex-B)       ← go2rtc pulls this
-HTTP  :3000/snapshot/<sn>  a JPEG still
-HTTP  :3000/clip/<sn>      the latest detection's recording, as an mp4 (HomeBase 2)
-HTTP  :3000/healthz        which cameras are streaming
-```
+- Cloud credentials load from owner-only `/data/credentials.json` into memory.
+  They are never assigned to `process.env`, Docker environment, command arguments,
+  Compose configuration or an unencrypted `.env` file.
+- Startup requires a private ZFS mount, the expected dataset name, an outside
+  storage guard and matching volume marker. Missing/locked storage has no
+  plaintext fallback. The guard alone does not create encryption: host
+  provisioning must verify native ZFS AES-256-GCM and manual key loading.
+- Eufy sessions, stream-client sessions, push registrations and optional Solix
+  sessions use the same guarded store. Writes replace files atomically and fsync
+  the file and containing directory. Corrupt JSON, unsafe permissions, symlinks
+  and hardlinks fail closed.
+- Session files and credentials are 0600; directories are 0700. All data and
+  retained private imagery stay on the encrypted volume. The container runs as
+  UID 10001 with a read-only root filesystem, no capabilities, no new privileges,
+  core dumps disabled and temporary storage in RAM.
+- Logs and protocol errors redact known secret values and sensitive fields.
+  Raw P2P debug logging is refused. Never share unreviewed diagnostics or dumps.
 
-Video is deliberately **not** on the WebSocket: the WS hands back a URL, and _connecting to that URL
-is what starts the camera — disconnecting is what stops it_. There is no "stream is running" flag to
-drift out of sync.
+Encryption protects stored data when locked. The running bridge, its process UID,
+root and administrators able to control Docker remain trusted while unlocked.
+This is a focused storage-hardening fork, not a claim that every dependency or
+Eufy protocol has received a complete security audit.
 
-Camera summaries advertise SDK-supported optical views and their stream, snapshot and go2rtc source
-identifiers. A secondary optic uses `?view=<view>` on the HTTP endpoints; the primary URLs stay unchanged.
-See [optical views](./docs/ws-protocol.md#optical-views) for selection, older-SDK behavior and per-view stills.
+The Home Assistant integration can remain
+[mega-yfue/ha-eufy-sdk](https://github.com/mega-yfue/ha-eufy-sdk).
+LAN camera/control interfaces retain the upstream protocol; this fork does not
+add client authentication to those interfaces.
 
-## Run it
+## Media-server setup
 
-Pull the published image and run it (bundles the SDK + go2rtc):
+See [deployment and recovery](docs/docker-compose.md). The prepared host uses a
+separate `media-pool/qolsys-credentials/eufy` dataset mounted at
+`/media-server/secure-eufy`, inheriting the existing manually unlocked credential
+key. The bridge receives only this child dataset, without Qolsys/MyQ secrets.
 
-```bash
-docker run -d --name eufy-bridge --network host \
-  -e EUFY_EMAIL='you@example.com' -e EUFY_PASSWORD='…' -e EUFY_COUNTRY='GB' \
-  -v /opt/eufy-bridge-data:/app/data \
-  ghcr.io/mega-yfue/ha-eufy-sdk-bridge:latest
-```
-
-or with Compose (`cp .env.example .env` first): `docker compose up -d`.
-
-**Full deploy guide (alongside Home Assistant, config reference, first-run 2FA/captcha):**
-[docs/docker-compose.md](./docs/docker-compose.md) · **WS protocol:** [docs/ws-protocol.md](./docs/ws-protocol.md) ·
-**Troubleshooting:** [docs/troubleshooting.md](./docs/troubleshooting.md)
-
-## Where it fits
-
-| Repo                                                                  | Role                                          |
-| --------------------------------------------------------------------- | --------------------------------------------- |
-| [`eufy-sdk`](https://github.com/mega-yfue/eufy-sdk)                   | the HA-agnostic library                       |
-| **`ha-eufy-sdk-bridge`**                                              | **this** — WS + HTTP + go2rtc daemon (Docker) |
-| [`ha-eufy-sdk-addon`](https://github.com/mega-yfue/ha-eufy-sdk-addon) | Home Assistant add-on wrapper                 |
-| [`ha-eufy-sdk`](https://github.com/mega-yfue/ha-eufy-sdk)             | the HACS integration (front door)             |
-
-> Status: working — WS control + auth-over-WS (2FA/captcha), device listing, snapshots, and go2rtc
-> streaming. **Optional Anker Solix** support (power stations / smart meter / Solarbank, a separate account)
-> via `SOLIX_EMAIL` / `SOLIX_PASSWORD` — see [docs/ws-protocol.md](./docs/ws-protocol.md) (`solix.*`).
-> Published image: `ghcr.io/mega-yfue/ha-eufy-sdk-bridge` (multi-arch: `amd64` · `arm64`).
-> **Publishing a GitHub Release** builds and pushes the versioned + `:latest` tags
-> automatically ([`.github/workflows/publish-ghcr.yml`](./.github/workflows/publish-ghcr.yml)); the same
-> build runs locally via [`scripts/publish-multiarch.sh`](./scripts/publish-multiarch.sh). A merge to the
-> `dev` branch publishes a rolling `:dev` tag for testing.
-
-## Contributing
-
-Contributions are welcome — please branch from **`dev`** and open your PR against **`dev`** (not
-`main`). See [CONTRIBUTING.md](./CONTRIBUTING.md) for the branch model, CI checks, and how releases
-are cut.
-
-## Develop
-
-The bridge is ESM (no build step) and depends on the SDK as a normal npm package
-([`@mega-yfue/eufy-sdk`](https://www.npmjs.com/package/@mega-yfue/eufy-sdk)) — `npm install` pulls it
-from the registry, no sibling checkout needed.
+Enter account details only in your own interactive terminal:
 
 ```bash
-npm install
-npm test          # node --test
-npm run lint      # prettier --check .   (npm run format to fix)
+ssh -t ahmed@100.106.82.72 'sudo /usr/local/sbin/eufy-storage configure'
+ssh -t ahmed@100.106.82.72 'sudo /usr/local/sbin/eufy-storage start'
 ```
 
-Every PR into `main` or `dev` runs the CI gate ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)):
-`npm ci` → lint → compile (`node --check` on each `.mjs`) → test. `main` is the public release line;
-`dev` is the development line (rolling `:dev` image).
+`configure` hides both email and password, writes directly to the encrypted
+volume and attempts no login. `start` first validates storage offline with
+networking disabled, then starts the bridge. Finish any 2FA/captcha through the
+Home Assistant integration. Use bridge address **192.168.50.69:3012** and RTSP
+port **8556**. Account country must match the Eufy account's registration country.
 
-T8400/T8410 live feeds use a named raw H.264 ffmpeg input to avoid format-probe misidentification. Video remains copied with wall-clock timestamps (`#async`); other models retain automatic input detection. This does not transcode H.265 feeds.
+After reboot, the existing unlock command loads the shared key, mounts Eufy and
+resumes it if credentials are configured, then restarts Home Assistant:
+
+```bash
+ssh -t ahmed@100.106.82.72 'sudo /usr/local/sbin/qolsys-storage unlock'
+```
+
+An Eufy resume failure does not prevent Home Assistant from restarting.
+
+## Validation and maintenance
+
+```bash
+npm ci --ignore-scripts
+npm run lint
+npm test
+python3 -m unittest discover -s deploy -p 'test_*.py'
+docker build -t eufy-bridge-secure:0.7.3 .
+```
+
+Tests use synthetic credentials and mocked devices. Do not operate real cameras,
+alarms or locks in tests. Keep updates on this fork: the upstream image uses its
+original credential-storage behavior. The release workflow targets this fork's
+registry; no upstream PR or beta image is required.
+
+[WS protocol](docs/ws-protocol.md) documents unchanged device/control capabilities.

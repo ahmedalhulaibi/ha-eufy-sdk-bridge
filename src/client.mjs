@@ -1,7 +1,8 @@
 // Construct the one EufyMega SDK client the bridge logs in with. Kept tiny and dependency-light so the
 // heavier modules depend on the instance via `ctx.eufy`, not on how it was built. Event wiring that
 // needs other modules (error → session recovery, push liveness) lives in server.mjs, after ctx is whole.
-import { EufyMega, FileSessionStore, FileFcmStore, ConsoleLogger } from "@mega-yfue/eufy-sdk";
+import { EufyMega, ConsoleLogger } from "@mega-yfue/eufy-sdk";
+import { StorageError } from "./secure-storage.mjs";
 
 /**
  * The high-intent events BRIDGE_PREWARM=1 opens a camera's session on, by their SDK `DeviceEventMap`
@@ -22,15 +23,16 @@ export function prewarmEventsFor(prewarm) {
  * `info`, so passing `"info"` here silenced exactly what the flag is meant to turn on: with it set you
  * got `p2pConnect` and nothing else, never the `[p2p] <sn> <<< …` frames.
  */
-export function createEufy({ cfg, DEBUG_P2P }) {
+export function createEufy({ cfg, DEBUG_P2P, stores }) {
+  if (!stores?.eufy || !stores?.push) throw new StorageError();
   const eufy = new EufyMega({
     email: cfg.email,
     password: cfg.password,
     countryCode: cfg.country,
-    store: new FileSessionStore(cfg.session),
+    store: stores.eufy,
     // Persist the FCM push registration so a restart RECONNECTS with the same token + seen-ids instead of
     // re-registering fresh each boot (the SDK defaults to MemoryFcmStore without this). See issue #30.
-    pushStore: new FileFcmStore(cfg.pushSession),
+    pushStore: stores.push,
     // Distinct per-install identity when set (BRIDGE_OPENUDID); undefined → the SDK's email-derived
     // default. Set it when running more than one client on an account (see cfg.openudid).
     openudid: cfg.openudid,

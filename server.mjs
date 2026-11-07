@@ -13,7 +13,7 @@
 // order here does not matter as long as `ctx` is whole before login begins.
 import http from "node:http";
 import fs from "node:fs";
-import { loadConfig } from "./src/config.mjs";
+import { loadSecureConfig } from "./src/secure-storage.mjs";
 import { checkWebRtcLibrary } from "./src/webrtc-check.mjs";
 import { installConsoleRedaction } from "./src/redact.mjs";
 import { installConsoleTimestamps } from "./src/log-time.mjs";
@@ -35,8 +35,15 @@ import { closeStreamClients } from "./streams.mjs";
 
 // Before anything logs: no echoed credential reaches the console (see redact.mjs).
 installConsoleRedaction();
+process.umask(0o077);
 if (/^(1|true|yes|on)$/i.test(process.env.LOG_TIMESTAMPS ?? "")) installConsoleTimestamps();
-const config = loadConfig();
+let config;
+try {
+  config = loadSecureConfig();
+} catch (error) {
+  console.error(`[bridge] startup refused: ${error.message}`);
+  process.exit(1);
+}
 const { cfg, DEBUG, DEBUG_P2P, EVENT_LOG, eventImageDir } = config;
 
 // last-event thumbnails live in the (mounted) data dir alongside the session file.
@@ -48,10 +55,6 @@ if (EVENT_LOG)
   );
 // Say up front whether the T9000's WebRTC library loads on this platform (see webrtc-check.mjs).
 void checkWebRtcLibrary().then(({ ok, line }) => (ok ? console.log(line) : console.warn(line)));
-if (!cfg.email || !cfg.password) {
-  console.error("[bridge] EUFY_EMAIL and EUFY_PASSWORD are required");
-  process.exit(1);
-}
 
 // ── assemble ctx ────────────────────────────────────────────────────────────────────────────────────
 const state = createState();
@@ -134,6 +137,7 @@ async function shutdown() {
   await closeStreamClients();
   await ctx.stopSolix?.();
   await eufy.disconnect?.();
+  config.storage.close();
   process.exit(0);
 }
 process.on("SIGINT", shutdown);

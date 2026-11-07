@@ -4,16 +4,12 @@
 // account's Solix devices as capability-driven SolixDevice objects, opens the shared SecureMqtt
 // telemetry stream, and forwards devices + live readings to WS clients (events `solixReady` /
 // `solixReading` / `solixAuth`; queried via `solix.devices` / `solix.status`).
-import {
-  SolixClient,
-  FileSessionStore,
-  SolixMqtt,
-  discoverSolixDevices,
-  solarbankSceneReadings,
-} from "@mega-yfue/eufy-sdk";
+import { SolixClient, SolixMqtt, discoverSolixDevices, solarbankSceneReadings } from "@mega-yfue/eufy-sdk";
+
+import { StorageError } from "./secure-storage.mjs";
 
 // Shown when a Solix command is used but Solix isn't configured (its `ctx.*` handler is absent).
-export const SOLIX_DISABLED = "solix is not enabled (set SOLIX_EMAIL / SOLIX_PASSWORD)";
+export const SOLIX_DISABLED = "solix is not enabled (configure its encrypted credential record)";
 
 // ── Anker Solix control commands (WS `solix.*`) ─────────────────────────────────────────────────────
 // The WS dispatcher (ws-server.mjs) drives these; the handlers they name are installed on `ctx` by
@@ -107,12 +103,13 @@ export function createSolix(ctx) {
   const s = cfg.solix;
   if (!s) return {}; // disabled — no SOLIX_EMAIL/PASSWORD
 
+  if (!ctx.stores?.solix) throw new StorageError();
   const st = ctx.state.solix; // { status, devices: Map<sn,SolixDevice>, client, mqtt }
   st.client = new SolixClient({
     email: s.email,
     password: s.password,
     countryCode: s.country,
-    store: new FileSessionStore(s.session),
+    store: ctx.stores.solix,
   });
 
   /** A WS-facing summary of one Solix device: identity + capabilities + the latest telemetry values. */

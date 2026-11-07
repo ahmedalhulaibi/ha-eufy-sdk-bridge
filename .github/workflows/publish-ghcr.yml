@@ -26,7 +26,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/mega-yfue/ha-eufy-sdk-bridge
+  IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
   publish:

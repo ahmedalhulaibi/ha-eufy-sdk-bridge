@@ -10,6 +10,8 @@ import { streamClientOptions } from "../streams.mjs";
 
 const { cfg } = loadConfig({ EUFY_EMAIL: "x@y.z", EUFY_PASSWORD: "pw", EUFY_COUNTRY: "DE" });
 
+cfg.sessionStore = { load: () => null, save() {}, clear() {} };
+
 test("stream clients never start realtime (no second push channel)", () => {
   assert.equal(streamClientOptions(cfg).autoRealtime, false);
 });
@@ -21,5 +23,5 @@ test("stream clients keep the control client's identity and session", () => {
   assert.equal(opts.openudid, cfg.openudid);
   assert.equal(opts.email, cfg.email);
   assert.equal(opts.countryCode, cfg.country);
-  assert.ok(opts.store, "must hydrate from the shared session store");
+  assert.equal(opts.store, cfg.sessionStore);
 });

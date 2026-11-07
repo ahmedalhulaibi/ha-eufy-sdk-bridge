@@ -1,3 +1,8 @@
+> Encrypted-storage fork: use `sudo eufy-storage status` and the private
+> `configure` command for account issues. Raw P2P debug logging is refused.
+> The upstream notes below may mention old paths or configuration options;
+> follow [the fork deployment guide](docker-compose.md) for credential storage.
+
 # Troubleshooting
 
 Common problems with the bridge, and what to check first. Option names are given as **add-on

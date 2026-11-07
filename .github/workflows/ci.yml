@@ -2,6 +2,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main, dev]
 
@@ -32,3 +34,6 @@ jobs:
           for f in $(git ls-files '*.mjs'); do node --check "$f"; done
       - name: Test
         run: npm test
+
+      - name: Test private host credential helper
+        run: python3 -m unittest discover -s deploy -p "test_*.py"

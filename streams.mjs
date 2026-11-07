@@ -11,7 +11,8 @@
 //
 // This is a workaround at the wrong layer; the right fix is session-per-stream INSIDE the SDK, after
 // which this whole file collapses to reusing the one control client.
-import { EufyMega, FileSessionStore, LoginStatus } from "@mega-yfue/eufy-sdk";
+import { EufyMega, LoginStatus } from "@mega-yfue/eufy-sdk";
+import { StorageError } from "./src/secure-storage.mjs";
 
 // sn -> entry. An entry wraps one client's login; callers await its `lease`. The lease is cached, not the
 // finished client: two first calls for one camera (e.g. an ffmpeg retry overlapping the first pull while the
@@ -48,11 +49,12 @@ function disconnectQuietly(client) {
  * a P2P media session, which `openReadable()` opens on demand — so opting out costs them nothing.
  */
 export function streamClientOptions(cfg) {
+  if (!cfg.sessionStore) throw new StorageError();
   return {
     email: cfg.email,
     password: cfg.password,
     countryCode: cfg.country,
-    store: new FileSessionStore(cfg.session), // shared session file → hydrate, no fresh login
+    store: cfg.sessionStore, // same guarded store as control client; never a file fallback
     openudid: cfg.openudid, // same identity as the control client (matches the shared session)
     autoRealtime: false, // NEVER start a second push channel — see above
   };

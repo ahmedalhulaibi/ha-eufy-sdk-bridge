@@ -21,7 +21,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-IMAGE="ghcr.io/mega-yfue/ha-eufy-sdk-bridge"
+IMAGE="ghcr.io/ahmedalhulaibi/ha-eufy-sdk-bridge"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 VERSION="${1:-$(node -p "require('./package.json').version")}"
 

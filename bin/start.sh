@@ -4,4 +4,6 @@
 # (Earlier this script started go2rtc and exited if go2rtc.yaml never appeared, which killed the
 # container mid-2FA; go2rtc lifecycle now lives inside server.mjs.)
 set -e
+umask 077
+ulimit -c 0
 exec node "${BRIDGE_APP_DIR:-/app}/server.mjs"

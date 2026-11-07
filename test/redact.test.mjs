@@ -16,9 +16,9 @@ test("an echoed token value is redacted, the rest of the message kept", () => {
   assert.equal(redactSecrets("token=abc123 and more"), "token=<redacted> and more");
 });
 
-test("a JSON field named token is left alone", () => {
+test("a JSON field named token is redacted", () => {
   const body = JSON.stringify({ token: "keep-me", note: "ok" });
-  assert.equal(redactSecrets(body), body);
+  assert.equal(redactSecrets(body), JSON.stringify({ token: "<redacted>", note: "ok" }));
 });
 
 test("console output is redacted, including Error messages", () => {

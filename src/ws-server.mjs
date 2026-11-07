@@ -5,7 +5,7 @@
 import { WebSocketServer } from "ws";
 import { listLightEffects } from "@mega-yfue/eufy-sdk";
 import { SOLIX_CONTROLS, SOLIX_DISABLED } from "./solix.mjs";
-import { redactSecrets } from "./redact.mjs";
+import { redactPayload } from "./redact.mjs";
 import { cameraViews, cameraView, validView } from "./camera-views.mjs";
 
 // Commands that require an authenticated eufy session — gated in one place before dispatch. (auth.* and
@@ -30,10 +30,10 @@ export function createWsServer(ctx, httpServer) {
   const { flags, clients } = ctx.state;
 
   const send = (ws, obj) => {
-    if (ws.readyState === ws.OPEN) ws.send(redactSecrets(JSON.stringify(obj)));
+    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(redactPayload(obj)));
   };
   const broadcast = (obj) => {
-    const s = redactSecrets(JSON.stringify(obj));
+    const s = JSON.stringify(redactPayload(obj));
     for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(s);
   };
 

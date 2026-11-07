@@ -1,0 +1,8 @@
+.git
+node_modules
+data
+.env
+*.log
+**/credentials.json
+**/*session*.json
+**/*fcm*.json

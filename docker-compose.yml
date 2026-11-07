@@ -1,26 +1,41 @@
+# Requires the provisioned encrypted ZFS mount. No cloud credentials belong here.
 services:
-  ha-eufy-sdk-bridge:
-    build:
-      context: .
-      # The SDK (@mega-yfue/eufy-sdk) is a sibling checkout; the Dockerfile builds it from this named
-      # build context. Requires Compose v2.17+ (additional_contexts).
-      additional_contexts:
-        sdk: ../eufy-sdk
-    image: ha-eufy-sdk-bridge:local
-    container_name: ha-eufy-sdk-bridge
+  eufy-bridge:
+    build: .
+    image: eufy-bridge-secure:0.7.3
+    container_name: eufy-bridge
+    user: "10001:10001"
     restart: unless-stopped
-    # WebRTC needs UDP + ICE, painful behind bridge networking. RTSP and the WS are fine either way —
-    # drop host mode and publish 3000/1984/8554 if you do not need WebRTC.
     network_mode: host
-    # Credentials come from ./.env (cp .env.example .env, or copy your workshop .env here).
-    env_file:
-      - .env
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ulimits:
+      core: 0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
     environment:
-      # Reachable through the hosted ports, not just localhost.
       BRIDGE_HOST: "0.0.0.0"
-      # WS/HTTP control port. Change it by setting BRIDGE_PORT in .env (default 3000). On host
-      # networking the daemon simply binds this port; the integration must use the same one.
-      BRIDGE_PORT: ${BRIDGE_PORT:-3000}
+      BRIDGE_PORT: "3012"
+      GO2RTC_API_PORT: "1985"
+      GO2RTC_RTSP_PORT: "8556"
+      GO2RTC_WEBRTC_PORT: "8557"
+      BRIDGE_EVENT_LOG: "0"
+      BRIDGE_DEBUG: "0"
+      BRIDGE_DEBUG_P2P: "0"
     volumes:
-      # Persist the login so a restart doesn't re-authenticate (eufy = ONE session per account).
-      - ./data:/app/data
+      - type: bind
+        source: /media-server/secure-eufy
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /etc/eufy-bridge/runtime-guard.json
+        target: /run/eufy-storage.json
+        read_only: true
+        bind:
+          create_host_path: false
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "2"

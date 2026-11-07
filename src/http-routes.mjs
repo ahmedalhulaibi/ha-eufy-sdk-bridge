@@ -9,11 +9,11 @@ import { createLiveStillTap } from "./live-still.mjs";
 import { liveFeedOpener } from "./live-feed.mjs";
 import { onBatteryPower } from "./power.mjs";
 import { storedThumbnailSeenAt } from "./stored-thumbnail.mjs";
-import { redactSecrets } from "./redact.mjs";
+import { redactPayload } from "./redact.mjs";
 import { cameraViews, cameraView, requestedView } from "./camera-views.mjs";
 
 function json(res, code, body) {
-  const s = redactSecrets(JSON.stringify(body));
+  const s = JSON.stringify(redactPayload(body));
   res.writeHead(code, { "content-type": "application/json", "content-length": Buffer.byteLength(s) });
   res.end(s);
 }
