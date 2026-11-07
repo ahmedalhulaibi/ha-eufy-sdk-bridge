@@ -25,6 +25,10 @@ BACKUPS = Path('/srv/media-server-backups')
 UID = 10001
 
 
+class ConfigurationInputError(Exception):
+    """A fixed, safe validation message that never includes entered values."""
+
+
 def command(*args):
     return subprocess.run(list(map(str, args)), check=True, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, universal_newlines=True).stdout.strip()
@@ -117,10 +121,17 @@ def configure():
     # environment, Compose configuration, command output or an unencrypted backup.
     email = getpass.getpass('Eufy account email (hidden): ').strip()
     password = getpass.getpass('Eufy account password (hidden): ')
+    repeated = getpass.getpass('Confirm Eufy account password (hidden): ')
+    if password != repeated:
+        raise ConfigurationInputError('Passwords did not match. Existing credentials were not changed.')
+    # Catch accidental partial terminal pastes, without claiming to implement
+    # Eufy's complete server-side password policy.
+    if len(password) < 4:
+        raise ConfigurationInputError('Password entry appears incomplete (fewer than four characters). Nothing was saved.')
     country = input('Account country (two letters, e.g. CA): ').strip().upper()
     if ('@' not in email or len(email) > 320 or not password or len(password) > 4096
             or not re.fullmatch(r'[A-Z]{2}', country)):
-        raise RuntimeError('Account fields are invalid; credentials were not saved')
+        raise ConfigurationInputError('Check the email format and two-letter account country. Nothing was saved.')
     if (ROOT / 'credentials.json').exists():
         confirmation = input('Replace the existing encrypted credentials? Type replace: ')
         if confirmation != 'replace':
@@ -227,6 +238,9 @@ def main():
 if __name__ == '__main__':
     try:
         main()
+    except ConfigurationInputError as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
     except Exception:
         # Exception text may contain subprocess stderr or parser excerpts. Never
         # echo it on a credential-handling command's terminal/log boundary.

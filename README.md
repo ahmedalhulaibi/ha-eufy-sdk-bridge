@@ -49,7 +49,7 @@ ssh -t ahmed@100.106.82.72 'sudo /usr/local/sbin/eufy-storage configure'
 ssh -t ahmed@100.106.82.72 'sudo /usr/local/sbin/eufy-storage start'
 ```
 
-`configure` hides both email and password, writes directly to the encrypted
+`configure` hides both email and password, asks for password confirmation, writes directly to the encrypted
 volume and attempts no login. `start` first validates storage offline with
 networking disabled, then starts the bridge. Finish any 2FA/captcha through the
 Home Assistant integration. Use bridge address **192.168.50.69:3012** and RTSP

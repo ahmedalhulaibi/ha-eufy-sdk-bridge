@@ -96,7 +96,7 @@ class HostStorageTests(unittest.TestCase):
         output = io.StringIO()
         with (patch.object(storage.sys.stdin, 'isatty', return_value=True),
               patch.object(storage.sys.stderr, 'isatty', return_value=True),
-              patch.object(storage.getpass, 'getpass', side_effect=['fixture@example.com', 'synthetic-password']),
+              patch.object(storage.getpass, 'getpass', side_effect=['fixture@example.com', 'synthetic-password', 'synthetic-password']),
               patch('builtins.input', return_value='CA'),
               patch.object(storage, 'command') as command,
               contextlib.redirect_stdout(output)):
@@ -105,6 +105,22 @@ class HostStorageTests(unittest.TestCase):
         self.assertNotIn('fixture@example.com', output.getvalue())
         command.assert_not_called()
         self.assertEqual(json.loads((self.root / 'credentials.json').read_text())['eufy']['country'], 'CA')
+
+    def test_password_confirmation_and_short_entry_fail_without_overwriting(self):
+        target = self.root / 'credentials.json'
+        original = {'password': 'previous-synthetic-secret'}
+        storage.save_private(target, original)
+        for password, repeated in [('synthetic-password', 'different-synthetic-password'),
+                                   ('x', 'x')]:
+            with (patch.object(storage.sys.stdin, 'isatty', return_value=True),
+                  patch.object(storage.sys.stderr, 'isatty', return_value=True),
+                  patch.object(storage.getpass, 'getpass', side_effect=['fixture@example.com', password, repeated]),
+                  patch('builtins.input') as ordinary_input):
+                with self.assertRaises(storage.ConfigurationInputError) as raised:
+                    storage.configure()
+            ordinary_input.assert_not_called()
+            self.assertNotIn(password, str(raised.exception))
+            self.assertEqual(json.loads(target.read_text()), original)
 
     def test_start_checks_storage_with_network_disabled_and_no_secret_arguments(self):
         storage.save_private(self.root / 'credentials.json', {'password': 'synthetic-password'})
